@@ -624,7 +624,7 @@ return (
           <Reveal key={i} delay={i*0.05}>
             <div style={{ backgroundColor:C.white, borderRadius:12, border:`1px solid ${openFaq===i ? C.accent : C.border}`, overflow:"hidden", transition:"border-color 0.2s ease" }}>
               <button onClick={() => setOpenFaq(openFaq===i ? null : i)} style={{ width:"100%", padding:"1.25rem 1.5rem", display:"flex", alignItems:"center", justifyContent:"space-between", background:"none", border:"none", cursor:"pointer", textAlign:isAr?"right":"left", gap:"1rem" }}>
-                <span style={{ fontSize:"1rem", fontWeight:500, color:C.primary, ...serif, fontSize:"1.1rem" }}>{faq.q[lang]}</span>
+                <span style={{ fontWeight:500, color:C.primary, ...serif, fontSize:"1.1rem" }}>{faq.q[lang]}</span>
                 <span style={{ color:C.accent, flexShrink:0, transform:openFaq===i?"rotate(180deg)":"none", transition:"transform 0.3s ease" }}>{Icon.chevDown}</span>
               </button>
               {openFaq===i && (
