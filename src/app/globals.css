@@ -1,26 +1,62 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #FAF8F4;
+  --bg-alt: #F0EAE0;
+  --primary: #1C3530;
+  --accent: #B8763A;
+  --text: #1A2420;
+  --muted: #6B7A70;
+  --border: #DDD4C2;
+  --white: #FFFFFF;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-dm-sans), 'DM Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+::selection { background: rgba(184,118,58,0.18); color: var(--primary); }
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(40px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+.hero-tag   { animation: fadeUp 0.6s ease 0.10s both; }
+.hero-title { animation: fadeUp 0.7s ease 0.25s both; }
+.hero-sub   { animation: fadeUp 0.7s ease 0.40s both; }
+.hero-ctas  { animation: fadeUp 0.7s ease 0.55s both; }
+.hero-card  { animation: fadeIn 0.9s ease 0.30s both; }
+
+.marquee-track { animation: marquee 30s linear infinite; display: flex; }
+.marquee-track:hover { animation-play-state: paused; }
+
+@media (max-width: 768px) {
+  .hide-mobile   { display: none !important; }
+  .show-mobile   { display: flex !important; }
+  .hero-grid     { grid-template-columns: 1fr !important; gap: 2.5rem !important; }
+  .two-col       { grid-template-columns: 1fr !important; gap: 2rem   !important; }
+  .practice-grid { grid-template-columns: 1fr !important; }
+  .three-col     { grid-template-columns: 1fr !important; }
+  .form-row      { grid-template-columns: 1fr !important; }
+  .footer-links  { flex-direction: column  !important; gap: 2rem !important; }
 }
