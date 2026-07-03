@@ -1,15 +1,66 @@
 "use client";
 import { useState, useEffect, useRef, ReactNode } from "react";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 
-function Reveal({ children, className = "", delay = 0, style = {} }: { children: ReactNode; className?: string; delay?: number; style?: React.CSSProperties; }) {
+if (typeof window !== "undefined") {
+  gsap.registerPlugin(ScrollTrigger);
+}
+
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// Scroll-triggered reveal, GSAP-powered (replaces the old IntersectionObserver + CSS version).
+function Reveal({ children, className = "", delay = 0, style = {}, from = { y: 40 } }: { children: ReactNode; className?: string; delay?: number; style?: React.CSSProperties; from?: gsap.TweenVars; }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [v, setV] = useState(false);
   useEffect(() => {
     const el = ref.current; if (!el) return;
-    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setV(true); obs.disconnect(); } }, { threshold: 0.1 });
-    obs.observe(el); return () => obs.disconnect();
+    if (prefersReducedMotion()) { gsap.set(el, { autoAlpha: 1, y: 0, rotation: 0 }); return; }
+    const ctx = gsap.context(() => {
+      gsap.fromTo(el, { autoAlpha: 0, ...from }, {
+        autoAlpha: 1, y: 0, rotation: 0, duration: 0.9, delay, ease: "power3.out",
+        scrollTrigger: { trigger: el, start: "top 88%", toggleActions: "play none none reverse" },
+      });
+    });
+    return () => ctx.revert();
+  }, [delay]);
+  return <div ref={ref} className={`reveal-el ${className}`} style={{ opacity: 0, ...style }}>{children}</div>;
+}
+
+// Large, low-opacity section number sitting behind headings — the "editorial ghost number" look,
+// with a subtle scroll-driven parallax float of its own.
+function GhostNum({ n, color }: { n: string; color: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const el = ref.current; if (!el || prefersReducedMotion()) return;
+    const ctx = gsap.context(() => {
+      gsap.to(el, { yPercent: -18, ease: "none", scrollTrigger: { trigger: el, start: "top bottom", end: "bottom top", scrub: 1 } });
+    });
+    return () => ctx.revert();
   }, []);
-  return <div ref={ref} className={className} style={{ opacity: v ? 1 : 0, transform: v ? "none" : "translateY(28px)", transition: `opacity 0.65s ease ${delay}s, transform 0.65s ease ${delay}s`, ...style }}>{children}</div>;
+  return (
+    <span ref={ref} aria-hidden="true" style={{ position: "absolute", top: "-2.2rem", left: "50%", transform: "translateX(-50%)", fontSize: "clamp(4.5rem,11vw,9rem)", fontWeight: 700, color, opacity: 0.07, letterSpacing: "-0.02em", pointerEvents: "none", zIndex: 0, whiteSpace: "nowrap", fontFamily: "var(--font-cormorant), serif" }}>{n}</span>
+  );
+}
+
+// Wraps a button/link so it drifts gently toward the cursor — the "magnetic CTA" micro-interaction.
+function Magnetic({ children, strength = 0.35 }: { children: ReactNode; strength?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current; if (!el || prefersReducedMotion()) return;
+    const xTo = gsap.quickTo(el, "x", { duration: 0.4, ease: "power3" });
+    const yTo = gsap.quickTo(el, "y", { duration: 0.4, ease: "power3" });
+    const move = (e: MouseEvent) => {
+      const r = el.getBoundingClientRect();
+      xTo((e.clientX - r.left - r.width / 2) * strength);
+      yTo((e.clientY - r.top - r.height / 2) * strength);
+    };
+    const leave = () => { xTo(0); yTo(0); };
+    el.addEventListener("mousemove", move);
+    el.addEventListener("mouseleave", leave);
+    return () => { el.removeEventListener("mousemove", move); el.removeEventListener("mouseleave", leave); };
+  }, [strength]);
+  return <div ref={ref} style={{ display: "inline-block" }}>{children}</div>;
 }
 
 const Icon = {
@@ -201,7 +252,7 @@ const blogs = [
   { tagEn: "Estate Planning", tagAr: "التخطيط العقاري", titleEn: "Why Estate Planning Is Not Just for the Wealthy", titleAr: "لماذا التخطيط العقاري ليس فقط للأثرياء", descEn: "Many people put off estate planning, thinking it's only for the wealthy. The truth is, everyone with assets can benefit enormously from proper planning.", descAr: "يؤجل كثيرون التخطيط العقاري ظناً أنه للأثرياء فقط. الحقيقة أن كل شخص يمكن أن يستفيد منه.", dateEn: "Apr 10, 2025", dateAr: "10 أبريل 2025", read: "4", color: "#2D5A4A" },
 ];
 
-const awards = ["⚖️ Martindale-Hubbell AV Rated", "🏆 Super Lawyers 2024", "🥇 Top Law Firm Jordan 2024", "📋 Legal 500 Listed", "✅ ISO 9001 Certified", "🎓 Jordan Bar Association", "🌟 Client Champion Award 2023", "💼 IFLR1000 Recognized"];
+const awards = ["Martindale-Hubbell AV Rated", "Super Lawyers 2024", "Top Law Firm Jordan 2024", "Legal 500 Listed", "ISO 9001 Certified", "Jordan Bar Association", "Client Champion Award 2023", "IFLR1000 Recognized"];
 const iconMap: Record<string, ReactNode> = { heart: Icon.heart, briefcase: Icon.briefcase, home: Icon.home, gavel: Icon.gavel };
 
 export default function Home() {
@@ -225,6 +276,16 @@ const [calBooked, setCalBooked] = useState(false);
 const [calMonth, setCalMonth] = useState(new Date().getMonth());
 const [calYear, setCalYear] = useState(new Date().getFullYear());
 const chatEndRef = useRef<HTMLDivElement>(null);
+const heroTagRef = useRef<HTMLDivElement>(null);
+const heroLine1Ref = useRef<HTMLSpanElement>(null);
+const heroLine2Ref = useRef<HTMLSpanElement>(null);
+const heroSubRef = useRef<HTMLParagraphElement>(null);
+const heroCtaRef = useRef<HTMLDivElement>(null);
+const heroCardRef = useRef<HTMLDivElement>(null);
+const kenBurnsRef = useRef<HTMLDivElement>(null);
+const statRefs = useRef<(HTMLDivElement | null)[]>([]);
+const whyRef = useRef<HTMLElement>(null);
+const whyCardRefs = useRef<(HTMLDivElement | null)[]>([]);
 const t = T[lang];
 const isAr = lang === "ar";
 useEffect(() => {
@@ -238,6 +299,93 @@ if (chatOpen && chatMsgs.length === 0) setChatMsgs([{ role: "bot", text: t.chatW
 useEffect(() => {
 chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
 }, [chatMsgs]);
+
+// Lenis smooth scrolling, synced to GSAP's ticker + ScrollTrigger. Skipped entirely for
+// users who prefer reduced motion.
+useEffect(() => {
+  if (prefersReducedMotion()) return;
+  let lenisInstance: any;
+  let rafCb: ((time: number) => void) | null = null;
+  let cancelled = false;
+  (async () => {
+    const { default: Lenis } = await import("lenis");
+    if (cancelled) return;
+    lenisInstance = new Lenis({ duration: 1.1, smoothWheel: true });
+    lenisInstance.on("scroll", ScrollTrigger.update);
+    rafCb = (time: number) => lenisInstance.raf(time * 1000);
+    gsap.ticker.add(rafCb);
+    gsap.ticker.lagSmoothing(0);
+  })();
+  return () => {
+    cancelled = true;
+    if (rafCb) gsap.ticker.remove(rafCb);
+    lenisInstance?.destroy();
+  };
+}, []);
+
+// Hero cinematic entrance: masked line-by-line title reveal, staggered fades, and a
+// number count-up on the stat tiles. Runs once on mount.
+useEffect(() => {
+  const nodes = [heroTagRef.current, heroLine1Ref.current, heroLine2Ref.current, heroSubRef.current, heroCtaRef.current, heroCardRef.current].filter(Boolean) as HTMLElement[];
+  if (prefersReducedMotion()) {
+    gsap.set(nodes, { autoAlpha: 1, y: 0, yPercent: 0, scale: 1 });
+    statRefs.current.forEach((el, i) => { if (el) el.textContent = t.heroStats[i]?.v ?? ""; });
+    return;
+  }
+  const ctx = gsap.context(() => {
+    const tl = gsap.timeline({ defaults: { ease: "power4.out" } });
+    if (heroTagRef.current) tl.fromTo(heroTagRef.current, { autoAlpha: 0, y: 16 }, { autoAlpha: 1, y: 0, duration: 0.6 });
+    if (heroLine1Ref.current) tl.fromTo(heroLine1Ref.current, { yPercent: 100 }, { yPercent: 0, duration: 0.9 }, "-=0.3");
+    if (heroLine2Ref.current) tl.fromTo(heroLine2Ref.current, { yPercent: 100 }, { yPercent: 0, duration: 0.9 }, "-=0.7");
+    if (heroSubRef.current) tl.fromTo(heroSubRef.current, { autoAlpha: 0, y: 20 }, { autoAlpha: 1, y: 0, duration: 0.7 }, "-=0.5");
+    if (heroCtaRef.current) tl.fromTo(heroCtaRef.current, { autoAlpha: 0, y: 20 }, { autoAlpha: 1, y: 0, duration: 0.7 }, "-=0.5");
+    if (heroCardRef.current) tl.fromTo(heroCardRef.current, { autoAlpha: 0, scale: 0.94 }, { autoAlpha: 1, scale: 1, duration: 0.9 }, "-=0.6");
+
+    if (kenBurnsRef.current) {
+      gsap.to(kenBurnsRef.current, { scale: 1.08, duration: 14, ease: "sine.inOut", yoyo: true, repeat: -1 });
+    }
+
+    statRefs.current.forEach((el, i) => {
+      if (!el) return;
+      const raw = t.heroStats[i]?.v ?? "";
+      const num = parseFloat(raw.replace(/[^0-9.]/g, "")) || 0;
+      const prefix = raw.trim().startsWith("+") ? "+" : "";
+      const suffix = raw.includes("%") ? "%" : (raw.trim().endsWith("+") ? "+" : "");
+      const counter = { val: 0 };
+      gsap.to(counter, {
+        val: num, duration: 1.5, delay: 0.9, ease: "power2.out",
+        onUpdate: () => { el.textContent = `${prefix}${Math.round(counter.val).toLocaleString()}${suffix}`; },
+      });
+    });
+  });
+  return () => ctx.revert();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
+// Pin the "Why Cedar Stone" section and scrub the three pillars into view one at a time.
+// Desktop + motion-safe only — mobile keeps the normal static 3-column layout.
+useEffect(() => {
+  if (prefersReducedMotion() || !whyRef.current) return;
+  const mm = gsap.matchMedia();
+  mm.add("(min-width: 900px)", () => {
+    const cards = whyCardRefs.current.filter(Boolean) as HTMLElement[];
+    if (cards.length < 3) return () => {};
+    const ctx = gsap.context(() => {
+      gsap.set(cards[1], { autoAlpha: 0.3, y: 30 });
+      gsap.set(cards[2], { autoAlpha: 0.3, y: 30 });
+      const tl = gsap.timeline({
+        scrollTrigger: { trigger: whyRef.current, start: "top top", end: "+=1400", scrub: 1, pin: true, anticipatePin: 1 },
+      });
+      tl.to(cards[1], { autoAlpha: 1, y: 0, duration: 1 })
+        .to(cards[0], { autoAlpha: 0.35, y: -10, duration: 1 }, "<")
+        .to(cards[2], { autoAlpha: 1, y: 0, duration: 1 })
+        .to(cards[1], { autoAlpha: 0.35, y: -10, duration: 1 }, "<");
+    }, whyRef);
+    return () => ctx.revert();
+  });
+  return () => mm.revert();
+}, []);
+
 const sendChat = () => {
 if (!chatInput.trim()) return;
 const userMsg = chatInput.trim();
@@ -271,6 +419,9 @@ const inputStyle: React.CSSProperties = { width: "100%", padding: "0.7rem 1rem",
 const dir = isAr ? "rtl" : "ltr";
 return (
 <div style={{ backgroundColor: C.bg, color: C.text, overflowX: "hidden" }} dir={dir}>
+  <noscript>
+    <style>{`.hero-tag,.hero-title,.hero-sub,.hero-ctas,.hero-card,.reveal-el{opacity:1 !important;transform:none !important;}`}</style>
+  </noscript>
   {showCookie && (
     <div style={{ position: "fixed", bottom: 80, left: "50%", transform: "translateX(-50%)", zIndex: 200, backgroundColor: C.primary, color: C.white, padding: "1rem 1.5rem", borderRadius: 12, display: "flex", alignItems: "center", gap: "1.5rem", boxShadow: "0 8px 32px rgba(0,0,0,0.2)", maxWidth: 520, width: "calc(100% - 3rem)", flexWrap: "wrap" }}>
       <p style={{ fontSize: "0.875rem", flex: 1, lineHeight: 1.5 }}>{t.cookieText}</p>
@@ -355,37 +506,41 @@ return (
   {/* COOKIE BANNER */}
   {/* HERO */}
   <section style={{ minHeight: "100vh", paddingTop: 72, position: "relative", overflow: "hidden", display: "flex", alignItems: "center" }}>
+    <div ref={kenBurnsRef} style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 65% 40%, rgba(28,53,48,0.07) 0%, transparent 50%), radial-gradient(ellipse at 30% 75%, rgba(184,118,58,0.05) 0%, transparent 45%)", pointerEvents: "none", transformOrigin: "center center", willChange: "transform" }} />
     <div style={{ position: "absolute", top: 0, right: 0, width: "55%", height: "100%", background: "radial-gradient(circle at 70% 40%, rgba(184,118,58,0.07) 0%, transparent 60%)", pointerEvents: "none" }} />
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "4rem 2rem", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4rem", alignItems: "center", width: "100%" }} className="hero-grid">
       <div>
-        <div className="hero-tag" style={{ display: "inline-flex", alignItems: "center", gap: 8, backgroundColor: "rgba(184,118,58,0.1)", border: "1px solid rgba(184,118,58,0.25)", color: C.accent, padding: "0.35rem 0.9rem", borderRadius: 100, fontSize: "0.75rem", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "1.5rem" }}>
+        <div ref={heroTagRef} className="hero-tag" style={{ display: "inline-flex", alignItems: "center", gap: 8, backgroundColor: "rgba(184,118,58,0.1)", border: "1px solid rgba(184,118,58,0.25)", color: C.accent, padding: "0.35rem 0.9rem", borderRadius: 100, fontSize: "0.75rem", fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "1.5rem", opacity: 0 }}>
           <span style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: C.accent, display: "inline-block" }} />{t.heroTag}
         </div>
-        <h1 className="hero-title" style={{ ...serif, fontSize: "clamp(2.8rem, 5vw, 4.6rem)", fontWeight: 600, lineHeight: 1.08, color: C.primary, marginBottom: "1.5rem" }}>
-          {t.heroTitle1}<br /><span style={{ color: C.accent, fontStyle: "italic" }}>{t.heroTitle2}</span>
+        <h1 className="hero-title" style={{ ...serif, fontSize: "clamp(3.5rem, 8vw, 7.5rem)", fontWeight: 600, lineHeight: 1.03, letterSpacing: "-0.03em", color: C.primary, marginBottom: "1.5rem" }}>
+          <span style={{ display: "block", overflow: "hidden" }}><span ref={heroLine1Ref} style={{ display: "inline-block" }}>{t.heroTitle1}</span></span>
+          <span style={{ display: "block", overflow: "hidden" }}><span ref={heroLine2Ref} style={{ display: "inline-block", color: C.accent, fontStyle: "italic" }}>{t.heroTitle2}</span></span>
         </h1>
-        <p className="hero-sub" style={{ fontSize: "1.05rem", lineHeight: 1.8, color: C.muted, maxWidth: 480, marginBottom: "2.5rem" }}>{t.heroDesc}</p>
-        <div className="hero-ctas" style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-          <a href="#contact" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 8, backgroundColor: C.primary, color: C.white, padding: "0.875rem 1.75rem", borderRadius: 8, fontSize: "0.925rem", fontWeight: 500, boxShadow: "0 4px 14px rgba(28,53,48,0.25)", transition: "all 0.2s ease" }}
-            onMouseEnter={e => { e.currentTarget.style.backgroundColor = "#2A4D46"; e.currentTarget.style.transform = "translateY(-2px)"; }}
-            onMouseLeave={e => { e.currentTarget.style.backgroundColor = C.primary; e.currentTarget.style.transform = "none"; }}
-          >{t.heroCta1} {Icon.arrow}</a>
+        <p ref={heroSubRef} className="hero-sub" style={{ fontSize: "1.05rem", lineHeight: 1.8, color: C.muted, maxWidth: 480, marginBottom: "2.5rem", opacity: 0 }}>{t.heroDesc}</p>
+        <div ref={heroCtaRef} className="hero-ctas" style={{ display: "flex", gap: "1rem", flexWrap: "wrap", opacity: 0 }}>
+          <Magnetic>
+            <a href="#contact" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 8, backgroundColor: C.primary, color: C.white, padding: "0.875rem 1.75rem", borderRadius: 8, fontSize: "0.925rem", fontWeight: 500, boxShadow: "0 4px 14px rgba(28,53,48,0.25)", transition: "all 0.2s ease" }}
+              onMouseEnter={e => { e.currentTarget.style.backgroundColor = "#2A4D46"; e.currentTarget.style.transform = "translateY(-2px)"; }}
+              onMouseLeave={e => { e.currentTarget.style.backgroundColor = C.primary; e.currentTarget.style.transform = "none"; }}
+            >{t.heroCta1} {Icon.arrow}</a>
+          </Magnetic>
           <a href="#practice-areas" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 8, border: `1.5px solid ${C.border}`, backgroundColor: "transparent", color: C.primary, padding: "0.875rem 1.75rem", borderRadius: 8, fontSize: "0.925rem", fontWeight: 500, transition: "all 0.2s ease" }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = C.primary; e.currentTarget.style.backgroundColor = "rgba(28,53,48,0.04)"; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.backgroundColor = "transparent"; }}
           >{t.heroCta2}</a>
         </div>
       </div>
-      <div className="hero-card" style={{ position: "relative", display: "flex", justifyContent: "center" }}>
+      <div ref={heroCardRef} className="hero-card" style={{ position: "relative", display: "flex", justifyContent: "center", opacity: 0 }}>
         <div style={{ width: "100%", maxWidth: 420, backgroundColor: C.primary, borderRadius: 20, padding: "2.75rem 2.25rem", position: "relative", overflow: "hidden", boxShadow: "0 24px 64px rgba(28,53,48,0.28)" }}>
           {[200,160,120].map((s,i) => <div key={i} style={{ position:"absolute", width:s, height:s, borderRadius:"50%", border:`${40-i*8}px solid rgba(255,255,255,0.04)`, top:-40+i*10, right:-40+i*10 }}/>)}
           <div style={{ width:52, height:52, borderRadius:14, backgroundColor:"rgba(184,118,58,0.18)", display:"flex", alignItems:"center", justifyContent:"center", color:C.accent, marginBottom:"1.75rem" }}>{Icon.scale}</div>
           <h3 style={{ ...serif, fontSize:"1.75rem", color:C.white, fontWeight:600, lineHeight:1.2, marginBottom:"0.75rem" }}>{t.heroCardTitle}</h3>
           <p style={{ color:"rgba(255,255,255,0.5)", fontSize:"0.875rem", lineHeight:1.75, marginBottom:"2rem" }}>{t.heroCardDesc}</p>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0.875rem" }}>
-            {t.heroStats.map(({ v, l }: { v: string; l: string }) => (
+            {t.heroStats.map(({ v, l }: { v: string; l: string }, i: number) => (
               <div key={l} style={{ backgroundColor:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:10, padding:"0.875rem" }}>
-                <div style={{ ...serif, fontSize:"1.5rem", fontWeight:700, color:C.accent }}>{v}</div>
+                <div ref={(el) => { statRefs.current[i] = el; }} style={{ ...serif, fontSize:"1.5rem", fontWeight:700, color:C.accent }}>{v}</div>
                 <div style={{ fontSize:"0.75rem", color:"rgba(255,255,255,0.45)", marginTop:2 }}>{l}</div>
               </div>
             ))}
@@ -436,7 +591,8 @@ return (
         </div>
       </Reveal>
       <div>
-        <Reveal>
+        <Reveal style={{ position: "relative" }}>
+          <GhostNum n="01" color={C.primary} />
           <div style={{ fontSize:"0.75rem", fontWeight:600, color:C.accent, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:"0.875rem" }}>{t.aboutTag}</div>
           <h2 style={{ ...serif, fontSize:"clamp(2rem,3vw,3rem)", fontWeight:600, color:C.primary, lineHeight:1.15, marginBottom:"1.5rem" }}>{t.aboutTitle}</h2>
         </Reveal>
@@ -461,14 +617,15 @@ return (
   {/* PRACTICE AREAS */}
   <section id="practice-areas" style={{ padding:"6rem 2rem", backgroundColor:C.bg }}>
     <div style={{ maxWidth:1100, margin:"0 auto" }}>
-      <Reveal style={{ textAlign:"center", marginBottom:"3.5rem" }}>
+      <Reveal style={{ textAlign:"center", marginBottom:"3.5rem", position: "relative" }}>
+        <GhostNum n="02" color={C.primary} />
         <div style={{ fontSize:"0.75rem", fontWeight:600, color:C.accent, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:"0.75rem" }}>{t.practiceTag}</div>
         <h2 style={{ ...serif, fontSize:"clamp(2rem,3.5vw,3rem)", fontWeight:600, color:C.primary, lineHeight:1.15, marginBottom:"1rem" }}>{t.practiceTitle}</h2>
         <p style={{ fontSize:"1rem", color:C.muted, maxWidth:520, margin:"0 auto", lineHeight:1.7 }}>{t.practiceDesc}</p>
       </Reveal>
       <div className="practice-grid" style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:"1.5rem" }}>
         {practiceAreas.map(({ iconKey, title, desc, tags }, i) => (
-          <Reveal key={i} delay={i*0.1}>
+          <Reveal key={i} delay={i*0.1} from={{ y: 50, rotation: isAr ? 3 : -3 }}>
             <div style={{ backgroundColor:C.white, borderRadius:16, padding:"2rem", border:`1px solid ${C.border}`, transition:"all 0.3s ease", height:"100%" }}
               onMouseEnter={e => { const el=e.currentTarget; el.style.borderColor=C.accent; el.style.transform="translateY(-4px)"; el.style.boxShadow="0 12px 40px rgba(28,53,48,0.12)"; }}
               onMouseLeave={e => { const el=e.currentTarget; el.style.borderColor=C.border; el.style.transform="none"; el.style.boxShadow="none"; }}
@@ -489,7 +646,8 @@ return (
   {/* TEAM */}
   <section id="team" style={{ padding:"6rem 2rem", backgroundColor:C.bgAlt }}>
     <div style={{ maxWidth:1100, margin:"0 auto" }}>
-      <Reveal style={{ textAlign:"center", marginBottom:"3.5rem" }}>
+      <Reveal style={{ textAlign:"center", marginBottom:"3.5rem", position: "relative" }}>
+        <GhostNum n="03" color={C.primary} />
         <div style={{ fontSize:"0.75rem", fontWeight:600, color:C.accent, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:"0.75rem" }}>{t.teamTag}</div>
         <h2 style={{ ...serif, fontSize:"clamp(2rem,3.5vw,3rem)", fontWeight:600, color:C.primary, lineHeight:1.15, marginBottom:"0.75rem" }}>{t.teamTitle}</h2>
         <p style={{ fontSize:"1rem", color:C.muted, lineHeight:1.7 }}>{t.teamDesc}</p>
@@ -520,10 +678,11 @@ return (
     </div>
   </section>
 
-  {/* WHY US */}
-  <section id="why-us" style={{ padding:"6rem 2rem", backgroundColor:C.primary }}>
-    <div style={{ maxWidth:1100, margin:"0 auto" }}>
-      <Reveal style={{ textAlign:"center", marginBottom:"3.5rem" }}>
+  {/* WHY US — pinned + scrubbed through on desktop */}
+  <section id="why-us" ref={whyRef} style={{ padding:"6rem 2rem", backgroundColor:C.primary, position: "relative", overflow: "hidden" }}>
+    <div style={{ maxWidth:1100, margin:"0 auto", position: "relative" }}>
+      <Reveal style={{ textAlign:"center", marginBottom:"3.5rem", position: "relative" }}>
+        <GhostNum n="04" color={C.white} />
         <div style={{ fontSize:"0.75rem", fontWeight:600, color:C.accent, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:"0.75rem" }}>{t.whyTag}</div>
         <h2 style={{ ...serif, fontSize:"clamp(2rem,3.5vw,3rem)", fontWeight:600, color:C.white, lineHeight:1.15 }}>
           {t.whyTitle1}<br /><span style={{ color:C.accent, fontStyle:"italic" }}>{t.whyTitle2}</span>
@@ -531,25 +690,42 @@ return (
       </Reveal>
       <div className="three-col" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:"1.5rem" }}>
         {whyUs.map(({ num, title, desc }, i) => (
-          <Reveal key={i} delay={i*0.12}>
-            <div style={{ padding:"2rem", borderRadius:16, border:"1px solid rgba(255,255,255,0.08)", backgroundColor:"rgba(255,255,255,0.04)", transition:"all 0.3s ease", height:"100%" }}
-              onMouseEnter={e => { e.currentTarget.style.backgroundColor="rgba(255,255,255,0.08)"; e.currentTarget.style.borderColor="rgba(184,118,58,0.3)"; }}
-              onMouseLeave={e => { e.currentTarget.style.backgroundColor="rgba(255,255,255,0.04)"; e.currentTarget.style.borderColor="rgba(255,255,255,0.08)"; }}
-            >
-              <div style={{ width:44, height:44, borderRadius:10, backgroundColor:"rgba(184,118,58,0.15)", display:"flex", alignItems:"center", justifyContent:"center", color:C.accent, marginBottom:"1.25rem", ...serif, fontSize:"1.1rem", fontWeight:700 }}>{num}</div>
-              <h3 style={{ ...serif, fontSize:"1.4rem", fontWeight:600, color:C.white, marginBottom:"0.75rem" }}>{title[lang]}</h3>
-              <p style={{ fontSize:"0.9rem", color:"rgba(255,255,255,0.52)", lineHeight:1.8 }}>{desc[lang]}</p>
-            </div>
-          </Reveal>
+          <div key={i} ref={(el) => { whyCardRefs.current[i] = el; }} style={{ padding:"2rem", borderRadius:16, border:"1px solid rgba(255,255,255,0.08)", backgroundColor:"rgba(255,255,255,0.04)", transition:"background-color 0.3s ease, border-color 0.3s ease", height:"100%" }}
+            onMouseEnter={e => { e.currentTarget.style.backgroundColor="rgba(255,255,255,0.08)"; e.currentTarget.style.borderColor="rgba(184,118,58,0.3)"; }}
+            onMouseLeave={e => { e.currentTarget.style.backgroundColor="rgba(255,255,255,0.04)"; e.currentTarget.style.borderColor="rgba(255,255,255,0.08)"; }}
+          >
+            <div style={{ width:44, height:44, borderRadius:10, backgroundColor:"rgba(184,118,58,0.15)", display:"flex", alignItems:"center", justifyContent:"center", color:C.accent, marginBottom:"1.25rem", ...serif, fontSize:"1.1rem", fontWeight:700 }}>{num}</div>
+            <h3 style={{ ...serif, fontSize:"1.4rem", fontWeight:600, color:C.white, marginBottom:"0.75rem" }}>{title[lang]}</h3>
+            <p style={{ fontSize:"0.9rem", color:"rgba(255,255,255,0.52)", lineHeight:1.8 }}>{desc[lang]}</p>
+          </div>
         ))}
       </div>
+    </div>
+  </section>
+
+  {/* QUOTE BREAK */}
+  <section style={{ padding:"8rem 2rem", backgroundColor:C.bg, position:"relative", overflow:"hidden" }}>
+    <div style={{ maxWidth:860, margin:"0 auto", textAlign:"center", position:"relative" }}>
+      <div aria-hidden="true" style={{ position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)", ...serif, fontSize:"clamp(9rem,22vw,20rem)", fontWeight:700, color:C.primary, opacity:0.03, lineHeight:1, pointerEvents:"none", userSelect:"none" }}>"</div>
+      <Reveal>
+        <div style={{ display:"flex", justifyContent:"center", color:C.accent, opacity:0.4, marginBottom:"2rem" }}>{Icon.quote}</div>
+        <blockquote style={{ ...serif, fontSize:"clamp(1.7rem, 3.5vw, 2.75rem)", fontWeight:500, color:C.primary, lineHeight:1.35, fontStyle:"italic", letterSpacing:"-0.01em", marginBottom:"2.5rem", position:"relative", zIndex:1 }}>
+          {isAr ? '"العدالة الحقيقية تبدأ بمحامٍ يستمع — ويهتم."' : '"True justice begins with an attorney who listens — and genuinely cares."'}
+        </blockquote>
+        <div style={{ display:"inline-flex", alignItems:"center", gap:"0.875rem" }}>
+          <div style={{ height:1, width:48, backgroundColor:C.border }} />
+          <span style={{ fontSize:"0.75rem", fontWeight:600, color:C.muted, letterSpacing:"0.1em", textTransform:"uppercase" }}>Cedar Stone Legal</span>
+          <div style={{ height:1, width:48, backgroundColor:C.border }} />
+        </div>
+      </Reveal>
     </div>
   </section>
 
   {/* TESTIMONIALS */}
   <section style={{ padding:"6rem 2rem", backgroundColor:C.bgAlt }}>
     <div style={{ maxWidth:1100, margin:"0 auto" }}>
-      <Reveal style={{ textAlign:"center", marginBottom:"3.5rem" }}>
+      <Reveal style={{ textAlign:"center", marginBottom:"3.5rem", position:"relative" }}>
+        <GhostNum n="05" color={C.primary} />
         <div style={{ fontSize:"0.75rem", fontWeight:600, color:C.accent, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:"0.75rem" }}>{t.testiTag}</div>
         <h2 style={{ ...serif, fontSize:"clamp(2rem,3.5vw,3rem)", fontWeight:600, color:C.primary, lineHeight:1.15 }}>{t.testiTitle}</h2>
       </Reveal>
@@ -577,7 +753,8 @@ return (
   {/* BLOG */}
   <section id="blog" style={{ padding:"6rem 2rem", backgroundColor:C.bg }}>
     <div style={{ maxWidth:1100, margin:"0 auto" }}>
-      <Reveal style={{ textAlign:"center", marginBottom:"3.5rem" }}>
+      <Reveal style={{ textAlign:"center", marginBottom:"3.5rem", position:"relative" }}>
+        <GhostNum n="06" color={C.primary} />
         <div style={{ fontSize:"0.75rem", fontWeight:600, color:C.accent, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:"0.75rem" }}>{t.blogTag}</div>
         <h2 style={{ ...serif, fontSize:"clamp(2rem,3.5vw,3rem)", fontWeight:600, color:C.primary, lineHeight:1.15, marginBottom:"0.75rem" }}>{t.blogTitle}</h2>
         <p style={{ fontSize:"1rem", color:C.muted, lineHeight:1.7 }}>{t.blogDesc}</p>
@@ -614,7 +791,8 @@ return (
   {/* FAQ */}
   <section id="faq" style={{ padding:"6rem 2rem", backgroundColor:C.bgAlt }}>
     <div style={{ maxWidth:760, margin:"0 auto" }}>
-      <Reveal style={{ textAlign:"center", marginBottom:"3.5rem" }}>
+      <Reveal style={{ textAlign:"center", marginBottom:"3.5rem", position: "relative" }}>
+        <GhostNum n="07" color={C.primary} />
         <div style={{ fontSize:"0.75rem", fontWeight:600, color:C.accent, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:"0.75rem" }}>{t.faqTag}</div>
         <h2 style={{ ...serif, fontSize:"clamp(2rem,3.5vw,3rem)", fontWeight:600, color:C.primary, lineHeight:1.15, marginBottom:"0.75rem" }}>{t.faqTitle}</h2>
         <p style={{ fontSize:"1rem", color:C.muted, lineHeight:1.7 }}>{t.faqDesc}</p>
@@ -627,11 +805,13 @@ return (
                 <span style={{ fontWeight:500, color:C.primary, ...serif, fontSize:"1.1rem" }}>{faq.q[lang]}</span>
                 <span style={{ color:C.accent, flexShrink:0, transform:openFaq===i?"rotate(180deg)":"none", transition:"transform 0.3s ease" }}>{Icon.chevDown}</span>
               </button>
-              {openFaq===i && (
-                <div style={{ padding:"0 1.5rem 1.25rem", borderTop:`1px solid ${C.border}` }}>
-                  <p style={{ fontSize:"0.9rem", color:C.muted, lineHeight:1.8, paddingTop:"1rem" }}>{faq.a[lang]}</p>
+              <div style={{ display:"grid", gridTemplateRows: openFaq===i ? "1fr" : "0fr", transition:"grid-template-rows 0.35s ease" }}>
+                <div style={{ overflow:"hidden" }}>
+                  <div style={{ padding:"0 1.5rem 1.25rem", borderTop:`1px solid ${C.border}` }}>
+                    <p style={{ fontSize:"0.9rem", color:C.muted, lineHeight:1.8, paddingTop:"1rem" }}>{faq.a[lang]}</p>
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
           </Reveal>
         ))}

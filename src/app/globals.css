@@ -12,7 +12,8 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; }
+/* Lenis handles smooth scroll — keep native scroll instant */
+html { scroll-behavior: auto; }
 
 body {
   background-color: var(--bg);
@@ -28,27 +29,39 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(40px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
 @keyframes marquee {
   from { transform: translateX(0); }
   to   { transform: translateX(-50%); }
 }
 
-.hero-tag   { animation: fadeUp 0.6s ease 0.10s both; }
-.hero-title { animation: fadeUp 0.7s ease 0.25s both; }
-.hero-sub   { animation: fadeUp 0.7s ease 0.40s both; }
-.hero-ctas  { animation: fadeUp 0.7s ease 0.55s both; }
-.hero-card  { animation: fadeIn 0.9s ease 0.30s both; }
+/* GSAP drives hero entrance — no CSS animation classes needed */
+.hero-line-wrap  { display: block; overflow: hidden; }
+.hero-line-inner { display: block; will-change: transform; }
 
-.marquee-track { animation: marquee 30s linear infinite; display: flex; }
+/* Marquee: 70 s, pauses on hover */
+.marquee-track { animation: marquee 70s linear infinite; display: flex; }
 .marquee-track:hover { animation-play-state: paused; }
+
+/* Ghost section numbers */
+.ghost-num {
+  position: absolute;
+  font-family: var(--font-cormorant), 'Cormorant Garamond', serif;
+  font-weight: 700;
+  font-size: clamp(7rem, 18vw, 16rem);
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--primary);
+  opacity: 0.045;
+}
+.ghost-num-light { color: var(--white); opacity: 0.06; }
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track { animation: none; }
+}
 
 @media (max-width: 768px) {
   .hide-mobile   { display: none !important; }
@@ -59,4 +72,11 @@ body {
   .three-col     { grid-template-columns: 1fr !important; }
   .form-row      { grid-template-columns: 1fr !important; }
   .footer-links  { flex-direction: column  !important; gap: 2rem !important; }
+  /* Why Cedar Stone: fallback to natural stacking on mobile */
+  .why-section   { height: auto !important; }
+  .why-inner     { position: relative !important; height: auto !important; min-height: unset !important; }
+  .why-item-abs  { position: relative !important; top: auto !important; opacity: 1 !important; }
+  /* Quote break: natural height on mobile */
+  .quote-section { height: auto !important; }
+  .quote-inner   { position: relative !important; height: auto !important; min-height: 70vh; }
 }
